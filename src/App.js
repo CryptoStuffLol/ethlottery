@@ -24,16 +24,16 @@ export default function LotteryGame() {
       if (typeof window.ethereum !== 'undefined') {
         try {
           await window.ethereum.request({ method: 'eth_requestAccounts' });
-          const provider = new ethers.providers.Web3Provider(window.ethereum);
-          const signer = provider.getSigner();
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
           const contract = new ethers.Contract(contractAddress, contractABI, signer);
           
-          const accounts = await provider.listAccounts();
+          const address = await signer.getAddress();
           const ticketPrice = await contract.TICKET_PRICE();
           
           setProvider(provider);
           setContract(contract);
-          setAccount(accounts[0]);
+          setAccount(address);
           setTicketPrice(ticketPrice);
         } catch (error) {
           console.error("Error initializing:", error);
