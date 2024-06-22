@@ -41,7 +41,6 @@ export default function LotteryGame() {
           setAccount(address);
           setTicketPrice(ticketPrice);
 
-          // Listen for network changes
           window.ethereum.on('chainChanged', () => window.location.reload());
         } catch (error) {
           console.error("Error initializing:", error);
@@ -61,7 +60,6 @@ export default function LotteryGame() {
         setResult(null);
         setError(null);
         
-        // Start slot animation
         const animationInterval = setInterval(() => {
           setSlots([
             Math.floor(Math.random() * 10) + 1,
@@ -70,22 +68,21 @@ export default function LotteryGame() {
           ]);
         }, 100);
 
-        // Play the game
         const tx = await contract.playGame({ value: ticketPrice });
         console.log("Transaction hash:", tx.hash);
         
-        // Wait for transaction to be mined
         const receipt = await tx.wait();
         console.log("Transaction receipt:", receipt);
         
-        // Stop animation
         clearInterval(animationInterval);
 
-        // Find the GamePlayed event in the transaction logs
         const gamePlayedEvent = receipt.logs
           .map(log => {
             try {
-              return contract.interface.parseLog(log);
+              return contract.interface.parseLog({
+                topics: log.topics,
+                data: log.data
+              });
             } catch (e) {
               return null;
             }
@@ -96,7 +93,19 @@ export default function LotteryGame() {
           const [player, won, results] = gamePlayedEvent.args;
           console.log("Game results:", { player, won, results });
 
-          setSlots(results.map(n => n.toNumber()));
+          // Safely convert BigInt to number
+          const safeToNumber = (value) => {
+            if (typeof value === 'bigint') {
+              return Number(value);
+            } else if (typeof value.toNumber === 'function') {
+              return value.toNumber();
+            } else if (typeof value === 'number') {
+              return value;
+            }
+            throw new Error(`Unable to convert ${value} to number`);
+          };
+
+          setSlots(results.map(safeToNumber));
           setResult(won);
 
           if (won) {
