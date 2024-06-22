@@ -5,9 +5,10 @@ import confetti from 'canvas-confetti';
 
 const contractABI = [
   "function playGame() public payable",
-  "function TICKET_PRICE() public view returns (uint256)"
+  "function TICKET_PRICE() public view returns (uint256)",
+  "event GamePlayed(address player, bool won, uint256[3] results)"
 ];
-const contractAddress = "0x8b0b0ca30e2ae09ff2c6bf9beafb72e13936624f"; // Replace with your actual contract address
+const contractAddress = "0x8b0b0ca30e2ae09ff2c6bf9beafb72e13936624f";
 
 export default function LotteryGame() {
   const [provider, setProvider] = useState(null);
@@ -53,39 +54,48 @@ export default function LotteryGame() {
         setResult(null);
         setError(null);
         
-        // Animate slots
-        for (let i = 0; i < 20; i++) {
+        // Start slot animation
+        const animationInterval = setInterval(() => {
           setSlots([
             Math.floor(Math.random() * 10) + 1,
             Math.floor(Math.random() * 10) + 1,
             Math.floor(Math.random() * 10) + 1
           ]);
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
+        }, 100);
 
         // Play the game
         const tx = await contract.playGame({ value: ticketPrice });
-        await tx.wait();
-
-        // For demo purposes, we'll randomly decide if player won
-        // In a real scenario, you'd want to listen for the GamePlayed event
-        const won = Math.random() < 0.1;  // 10% chance of winning
         
-        setSlots(won ? [7, 7, 7] : [
-          Math.floor(Math.random() * 10) + 1,
-          Math.floor(Math.random() * 10) + 1,
-          Math.floor(Math.random() * 10) + 1
-        ]);
-
-        setResult(won);
+        // Wait for transaction to be mined
+        const receipt = await tx.wait();
         
-        if (won) {
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 }
-          });
+        // Stop animation
+        clearInterval(animationInterval);
+
+        // Find the GamePlayed event in the transaction receipt
+        const event = receipt.logs.find(
+          log => log.topics[0] === contract.interface.getEventTopic('GamePlayed')
+        );
+
+        if (event) {
+          const decodedEvent = contract.interface.decodeEventLog('GamePlayed', event.data, event.topics);
+          const won = decodedEvent.won;
+          const results = decodedEvent.results;
+
+          setSlots(results.map(n => n.toNumber()));
+          setResult(won);
+
+          if (won) {
+            confetti({
+              particleCount: 100,
+              spread: 70,
+              origin: { y: 0.6 }
+            });
+          }
+        } else {
+          throw new Error("GamePlayed event not found in transaction receipt");
         }
+
       } catch (error) {
         console.error("Error playing game:", error);
         setError("Failed to play the game. Make sure you're connected to the Base Goerli testnet and have enough ETH.");
@@ -120,7 +130,7 @@ export default function LotteryGame() {
                 isRolling ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600'
               } text-white font-bold transition duration-200`}
             >
-              {isRolling ? 'Rolling...' : 'Play (0.0001 ETH)'}
+              {isRolling ? 'Rolling...' : `Play (${ethers.formatEther(ticketPrice || 0)} ETH)`}
             </button>
             {result !== null && (
               <div className={`mt-4 p-2 rounded ${result ? 'bg-green-100' : 'bg-red-100'}`}>
