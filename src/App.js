@@ -19,6 +19,7 @@ export default function LotteryGame() {
   const [isRolling, setIsRolling] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [networkName, setNetworkName] = useState(null);
 
   useEffect(() => {
     const init = async () => {
@@ -26,6 +27,9 @@ export default function LotteryGame() {
         try {
           await window.ethereum.request({ method: 'eth_requestAccounts' });
           const provider = new ethers.BrowserProvider(window.ethereum);
+          const network = await provider.getNetwork();
+          setNetworkName(network.name);
+          
           const signer = await provider.getSigner();
           const contract = new ethers.Contract(contractAddress, contractABI, signer);
           
@@ -36,9 +40,12 @@ export default function LotteryGame() {
           setContract(contract);
           setAccount(address);
           setTicketPrice(ticketPrice);
+
+          // Listen for network changes
+          window.ethereum.on('chainChanged', () => window.location.reload());
         } catch (error) {
           console.error("Error initializing:", error);
-          setError("Failed to connect to MetaMask. Please make sure it's installed and unlocked.");
+          setError(`Failed to connect: ${error.message}`);
         }
       } else {
         setError("MetaMask not detected. Please install MetaMask to play.");
@@ -65,22 +72,29 @@ export default function LotteryGame() {
 
         // Play the game
         const tx = await contract.playGame({ value: ticketPrice });
+        console.log("Transaction hash:", tx.hash);
         
         // Wait for transaction to be mined
         const receipt = await tx.wait();
+        console.log("Transaction receipt:", receipt);
         
         // Stop animation
         clearInterval(animationInterval);
 
-        // Find the GamePlayed event in the transaction receipt
-        const event = receipt.logs.find(
-          log => log.topics[0] === contract.interface.getEventTopic('GamePlayed')
-        );
+        // Find the GamePlayed event in the transaction logs
+        const gamePlayedEvent = receipt.logs
+          .map(log => {
+            try {
+              return contract.interface.parseLog(log);
+            } catch (e) {
+              return null;
+            }
+          })
+          .find(event => event && event.name === 'GamePlayed');
 
-        if (event) {
-          const decodedEvent = contract.interface.decodeEventLog('GamePlayed', event.data, event.topics);
-          const won = decodedEvent.won;
-          const results = decodedEvent.results;
+        if (gamePlayedEvent) {
+          const [player, won, results] = gamePlayedEvent.args;
+          console.log("Game results:", { player, won, results });
 
           setSlots(results.map(n => n.toNumber()));
           setResult(won);
@@ -93,12 +107,12 @@ export default function LotteryGame() {
             });
           }
         } else {
-          throw new Error("GamePlayed event not found in transaction receipt");
+          throw new Error("GamePlayed event not found in transaction logs");
         }
 
       } catch (error) {
         console.error("Error playing game:", error);
-        setError("Failed to play the game. Make sure you're connected to the Base Sepolia testnet and have enough ETH.");
+        setError(`Failed to play the game: ${error.message}`);
         setResult(false);
       } finally {
         setIsRolling(false);
@@ -116,6 +130,9 @@ export default function LotteryGame() {
           <div className="text-center p-4">Connecting to MetaMask...</div>
         ) : (
           <>
+            <div className="text-center mb-4">
+              Connected to: {networkName || 'Unknown Network'}
+            </div>
             <div className="flex justify-around mb-4">
               {slots.map((slot, index) => (
                 <div key={index} className="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center text-4xl font-bold">
