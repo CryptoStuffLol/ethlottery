@@ -98,7 +98,7 @@ export default function LotteryGame() {
 
       } catch (error) {
         console.error("Error playing game:", error);
-        setError("Failed to play the game. Make sure you're connected to the Base Goerli testnet and have enough ETH.");
+        setError("Failed to play the game. Make sure you're connected to the Base Sepolia testnet and have enough ETH.");
         setResult(false);
       } finally {
         setIsRolling(false);
@@ -108,7 +108,7 @@ export default function LotteryGame() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">
-      <h1 className="text-4xl font-bold mb-8 text-white">ETH Lottery on Base</h1>
+      <h1 className="text-4xl font-bold mb-8 text-white">ETH Lottery on Base Sepolia</h1>
       <div className="bg-white p-8 rounded-lg shadow-lg">
         {error ? (
           <div className="text-red-500 mb-4">{error}</div>
